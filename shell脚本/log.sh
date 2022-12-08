@@ -1,4 +1,4 @@
-```shell
+
 WORKDIR=/data/logs
 DATE=$(date +%F)
 
@@ -25,4 +25,3 @@ MainProcess (){
 
 
 MainProcess
-```
