@@ -1,4 +1,5 @@
 # 安装nginx-controller
+#
 ```shell
 
 helm repo add bitnami https://charts.bitnami.com/bitnami
