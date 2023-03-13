@@ -12,4 +12,5 @@ helm upgrade --install nginx-ingress-controller bitnami/nginx-ingress-controller
 --set dnsPolicy=ClusterFirstWithHostNet  \
 --set service.type=ClusterIP \
 --set defaultBackend.enabled=false
+
 ```
