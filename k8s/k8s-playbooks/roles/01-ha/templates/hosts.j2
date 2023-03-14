@@ -1,0 +1,10 @@
+#----------------kubernetes cluster dependency------------------
+{% for host in groups['all'] %}
+{{ hostvars[host].ansible_ssh_host }} {{ hostvars[host].inventory_hostname }}
+{% endfor %}
+{% if groups['master'] | length == 1 %}
+{{ hostvars['k8s-master1'].ansible_ssh_host }} cluster-endpoint
+{% elif groups['master'] | length > 1 %}
+{{ vip }} cluster-endpoint
+{% endif %}
+#----------------------------end--------------------------------

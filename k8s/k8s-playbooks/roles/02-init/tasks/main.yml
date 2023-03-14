@@ -1,0 +1,25 @@
+---
+
+- name: 初始化集群
+  shell: |
+    kubeadm init --config {{ workdir }}/release/02-init/kubeadm-config.yaml --upload-certs &> {{ workdir }}/release/02-init/kubeadm-init.log
+  args:
+    executable: /bin/bash
+
+- name: 生成master添加脚本
+  shell: (echo '#!/bin/bash' ; sed -rn '/You can now join any number of the control-plane node running the following command on each as root:/,+4p' {{ workdir }}/release/02-init/kubeadm-init.log | sed 1,2d) > {{ playbook_dir }}/roles/03-node/files/master_join.sh
+  args:
+    executable: /bin/bash
+  when: architecture == 'cluster'
+
+- name: 生成node添加脚本
+  args:
+    executable: /bin/bash
+  shell: (echo '#!/bin/bash' ; sed -rn '/Then you can join any number of worker nodes by running the following on each as root:/,+3p' {{ workdir }}/release/02-init/kubeadm-init.log | sed 1,2d) > {{ playbook_dir }}/roles/03-node/files/node_join.sh
+
+- name: 配置kubectl
+  script: after_init.sh
+
+- wait_for:
+    port: 6443
+    state: started

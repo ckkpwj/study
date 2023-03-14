@@ -1,0 +1,45 @@
+#所有主机名不可修改，可按顺序新增或减少
+#配置参考：
+#直接使用root+root密码：k8s-master1 ansible_ssh_host=192.168.136.11 ansible_ssh_user=root ansible_ssh_pass=1
+#使用root+密钥：k8s-master1 ansible_ssh_host=192.168.136.11 ansible_ssh_user=root
+#使用普通用户+密码+sudo提权：k8s-master1 ansible_ssh_host=192.168.136.11 ansible_ssh_user=abc ansible_ssh_pass=1 ansible_become_pass=1
+
+[master]
+# 如果部署单master，只保留k8s-master1节点
+k8s-master1 ansible_ssh_host=10.12.1.92 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+k8s-master2 ansible_ssh_host=10.12.1.91 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+k8s-master3 ansible_ssh_host=10.12.1.90 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+
+[node]
+k8s-node1 ansible_ssh_host=10.12.1.93 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+k8s-node2 ansible_ssh_host=10.12.1.94 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+k8s-node3 ansible_ssh_host=10.12.1.95 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+k8s-node4 ansible_ssh_host=10.12.1.88 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+
+
+[lb]
+# 如果部署多master，则需要配置高可用，可以单独用两台服务器，也可以直接在master中挑两台
+lb1 ansible_ssh_host=10.12.1.92 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+lb2 ansible_ssh_host=10.12.1.91 ansible_ssh_user=root ansible_ssh_pass='Nic**8684'
+
+
+[newnode]
+# 新增节点
+#k8s-node1 ansible_ssh_host=192.168.0.235 ansible_ssh_user=root
+
+
+[db]
+#mariadb-primary ansible_ssh_host=192.168.2.16 ansible_ssh_user=root ansible_ssh_pass=1 ansible_become_pass=1
+#mariadb-secondary ansible_ssh_host=192.168.2.17 ansible_ssh_user=root ansible_ssh_pass=1 ansible_become_pass=1
+
+
+
+# ----------------------------------------------------------
+[k8s:children]
+master
+node
+newnode
+lb
+
+[test]
+#test1 ansible_ssh_host=192.168.0.204 ansible_ssh_port=2222

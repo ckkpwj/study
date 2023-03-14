@@ -1,0 +1,132 @@
+---
+- name: 工作目录初始化
+  file:
+    dest: "{{ item }}"
+    state: directory
+  with_items:
+    - "{{ workdir }}/release/00-common"
+    - "{{ workdir }}/release/01-ha"
+    - "{{ workdir }}/release/02-init"
+    - "{{ workdir }}/release/03-node"
+    - "{{ workdir }}/release/04-addons"
+    - "{{ workdir }}/release/05-newnode"
+
+- name: 添加hosts
+  template:
+    src: hosts.j2
+    dest: "{{ workdir }}/release/01-ha/hosts"
+- shell: |
+    if grep 'kubernetes cluster dependency' /etc/hosts;then 
+      sed -i '/kubernetes cluster dependency/,/-end-/d' /etc/hosts
+    fi
+    cat {{ workdir }}/release/01-ha/hosts >> /etc/hosts
+  args:
+    executable: /bin/bash
+
+- shell: |
+    if cat /etc/redhat-release &> /dev/null;then
+      if [ ! -d /etc/yum.repos.d/bak ];then
+        mkdir /etc/yum.repos.d/bak && mv /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/
+      fi
+    elif [ "$(lsb_release -is)" == 'Ubuntu' ];then
+      if [ ! -f /etc/apt/sources.list_bak ];then
+        mv /etc/apt/sources.list /etc/apt/sources.list_bak
+      fi
+    else
+      echo "Opration system is not CentOS or Ubuntu!"
+      exit 1
+    fi
+  args:
+    executable: /bin/bash
+
+- name: 配置软件源-ubuntu
+  copy:
+    src: sources-focal.list
+    dest: /etc/apt/sources.list
+  when: ansible_distribution_release == 'focal'
+
+- name: 配置软件源-ubuntu
+  copy:
+    src: sources-jammy.list
+    dest: /etc/apt/sources.list
+  when: ansible_distribution_release == 'jammy'
+
+- name: 配置软件源-centos
+  copy:
+    src: Centos-7.repo
+    dest: /etc/yum.repos.d/Centos-7-aliyun.repo
+  when: ansible_distribution == 'CentOS'
+
+- name: 安装依赖软件-ubuntu
+  apt:
+    name:
+      - keepalived
+      - haproxy
+    state: present
+    update_cache: yes
+  when: ansible_distribution == 'Ubuntu'
+
+- name: 安装依赖软件-centos
+  yum:
+    name:
+      - keepalived
+      - haproxy
+    state: present
+    update_cache: yes
+  when: ansible_distribution == 'CentOS'
+
+- name: 执行初始化操作-ubuntu
+  script: ubuntu_init.sh
+  when: ansible_distribution == 'Ubuntu'
+
+- name: 执行初始化操作-centos
+  script: centos_init.sh
+  when: ansible_distribution == 'CentOS'
+
+- name: 关闭firewalld
+  service:
+    name: firewalld
+    state: stopped
+    enabled: no
+  when: ansible_distribution == 'CentOS'
+
+- name: 关闭selinux
+  lineinfile:
+    dest: /etc/selinux/config
+    regexp: "^SELINUX="
+    line: 'SELINUX=disabled'
+  when: ansible_distribution == 'CentOS'
+
+- name: 设置时区
+  shell: timedatectl set-timezone Asia/Shanghai
+  args:
+    executable: /bin/bash
+
+- name: 分发keepalived配置文件
+  template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+
+- name: 分发apiserver检测脚本
+  template:
+    src: check_apiserver.sh.j2
+    dest: /etc/keepalived/check_apiserver.sh
+    mode: '0755'
+
+- name: 分发haproxy配置文件
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+
+- name: 启动haproxy
+  systemd:
+    name: haproxy
+    state: restarted
+    enabled: yes
+
+- name: 启动keepalived服务
+  systemd:
+    name: keepalived
+    state: restarted
+    enabled: yes
+
