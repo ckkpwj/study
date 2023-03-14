@@ -1,0 +1,11 @@
+---
+
+- name: 生成node添加脚本
+  shell: (echo '#!/bin/bash' ; kubeadm token create --print-join-command) > {{ playbook_dir }}/roles/05-newnode/files/node_join.sh
+  args:
+    executable: /bin/bash
+  when: inventory_hostname == 'k8s-master1'
+
+- name: 添加节点-node
+  script: node_join.sh
+  when: not inventory_hostname == 'k8s-master1'

@@ -1,0 +1,35 @@
+{% if inventory_hostname == 'lb1' %}
+  {% set role = 'MASTER' %}
+  {% set priority = 101 %}
+{% elif inventory_hostname == 'lb2' %}
+  {% set role = 'BACKUP' %}
+  {% set priority = 100 %}
+{% endif %}
+
+global_defs {
+    router_id LVS_DEVEL
+}
+vrrp_script check_apiserver {
+  script "/etc/keepalived/check_apiserver.sh"
+  interval 3
+  weight -2
+  fall 10
+  rise 2
+}
+
+vrrp_instance VI_1 {
+    state {{ role }}
+    interface {{ nic }}
+    virtual_router_id {{ virtual_router_id }}
+    priority {{ priority }}
+    authentication {
+        auth_type PASS
+        auth_pass keepalived42
+    }
+    virtual_ipaddress {
+        {{ vip }}
+    }
+    track_script {
+        check_apiserver
+    }
+}

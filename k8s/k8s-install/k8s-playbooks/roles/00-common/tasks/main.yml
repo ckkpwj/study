@@ -1,0 +1,322 @@
+---
+- name: 修改主机名
+  hostname: name={{ inventory_hostname }}
+
+- name: 工作目录初始化
+  file:
+    dest: "{{ item }}"
+    state: directory
+  with_items:
+    - "{{ workdir }}/release/00-common"
+    - "{{ workdir }}/release/01-ha"
+    - "{{ workdir }}/release/02-init"
+    - "{{ workdir }}/release/03-node"
+    - "{{ workdir }}/release/04-addons"
+    - "{{ workdir }}/release/05-newnode"
+
+- name: 添加hosts
+  template:
+    src: hosts.j2
+    dest: "{{ workdir }}/release/00-common/hosts"
+- shell: |
+    if grep 'kubernetes cluster dependency' /etc/hosts;then 
+      sed -i '/kubernetes cluster dependency/,/-end-/d' /etc/hosts
+    fi
+    cat {{ workdir }}/release/00-common/hosts >> /etc/hosts
+  args:
+    executable: /bin/bash
+
+- shell: |
+    if cat /etc/redhat-release &> /dev/null;then
+      if [ ! -d /etc/yum.repos.d/bak ];then
+        mkdir /etc/yum.repos.d/bak && mv /etc/yum.repos.d/*.repo /etc/yum.repos.d/bak/
+      fi
+    elif [ "$(lsb_release -is)" == 'Ubuntu' ];then
+      if [ ! -f /etc/apt/sources.list_bak ];then
+        mv /etc/apt/sources.list /etc/apt/sources.list_bak
+      fi
+    else
+      echo "Opration system is not CentOS or Ubuntu!"
+      exit 1
+    fi
+  args:
+    executable: /bin/bash
+
+- name: 配置软件源
+  copy:
+    src: sources-focal.list
+    dest: /etc/apt/sources.list
+  when: ansible_distribution_release == 'focal'
+
+- copy:
+    src: sources-jammy.list
+    dest: /etc/apt/sources.list
+  when: ansible_distribution_release == 'jammy'
+
+- copy:
+    src: Centos-7.repo
+    dest: /etc/yum.repos.d/Centos-7-aliyun.repo
+  when: ansible_distribution == 'CentOS'
+
+- script: add_source.sh
+
+- name: 安装容器运行时
+  apt:
+    name:
+      - containerd
+    state: present
+    update_cache: yes
+  when: ansible_distribution == 'Ubuntu' and runtime == 'containerd'
+
+- yum:
+    name:
+      - containerd
+    state: present
+    update_cache: yes
+  when: ansible_distribution == 'CentOS' and runtime == 'containerd'
+
+- apt:
+    name:
+      - docker-ce=5:{{ docker_version }}~3-0~ubuntu-focal
+      - docker-ce-cli=5:{{ docker_version }}~3-0~ubuntu-focal
+    state: present
+    update_cache: yes
+  when: ansible_distribution_release == 'focal' and runtime == 'docker'
+
+- apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+    state: present
+    update_cache: yes
+  when: ansible_distribution_release == 'jammy' and runtime == 'docker'
+
+- yum:
+    name:
+      - docker-ce-{{ docker_version }}-3.el7
+      - docker-ce-cli-{{ docker_version }}-3.el7
+    state: present
+    update_cache: yes
+  when: ansible_distribution == 'CentOS' and runtime == 'docker'
+
+- name: 安装k8s-ubuntu
+  apt:
+    name:
+      - chrony
+      - wget
+      - git
+      - curl
+      - lvm2
+      - telnet
+      - nfs-kernel-server
+      - net-tools
+      - vim
+      - ipset
+      - ipvsadm
+      - bash-completion
+      - kubelet={{ k8s_tools_version }}-00
+      - kubeadm={{ k8s_tools_version }}-00
+      - kubectl={{ k8s_tools_version }}-00
+    state: present
+  when: ansible_distribution_release == 'focal'
+
+- apt:
+    name:
+      - chrony
+      - wget
+      - git
+      - curl
+      - lvm2
+      - telnet
+      - nfs-kernel-server
+      - net-tools
+      - vim
+      - ipset
+      - ipvsadm
+      - bash-completion
+      - kubelet={{ k8s_tools_version }}-00
+      - kubeadm={{ k8s_tools_version }}-00
+      - kubectl={{ k8s_tools_version }}-00
+    state: present
+  when: ansible_distribution_release == 'jammy'
+
+- name: 安装k8s-centos
+  yum:
+    name:
+      - wget
+      - git
+      - curl
+      - lvm2
+      - telnet
+      - bash-completion
+      - nfs-utils
+      - chrony
+      - net-tools
+      - vim
+      - ipset
+      - ipvsadm
+      - bash-completion
+      - kubelet-{{ k8s_tools_version }}
+      - kubeadm-{{ k8s_tools_version }}
+      - kubectl-{{ k8s_tools_version }}
+    state: present
+  when: ansible_distribution == 'CentOS'
+
+- name: 服务器初始化-ubuntu
+  script: ubuntu_init.sh
+  when: ansible_distribution == 'Ubuntu'
+
+- name: 服务器初始化-centos
+  script: centos_init.sh
+  when: ansible_distribution == 'CentOS'
+
+- name: 关闭firewalld
+  service:
+    name: firewalld
+    state: stopped
+    enabled: no
+  when: ansible_distribution == 'CentOS'
+
+- name: 关闭selinux
+  lineinfile:
+    dest: /etc/selinux/config
+    regexp: "^SELINUX="
+    line: 'SELINUX=disabled'
+  when: ansible_distribution == 'CentOS'
+
+- name: 关闭swap
+  lineinfile:
+    dest: /etc/fstab
+    regexp: ".*swap"
+    line: ""
+  when: ansible_distribution == 'CentOS'
+
+- name: 即时生效
+  shell: setenforce 0 ; swapoff -a
+  args:
+    executable: /bin/bash
+  when: ansible_distribution == 'CentOS'
+
+- name: 设置时区
+  shell: timedatectl set-timezone Asia/Shanghai
+  args:
+    executable: /bin/bash
+
+- name: 创建数据目录
+  file:
+    dest: /etc/docker
+    state: directory
+  when: runtime == 'docker'
+
+- file:
+    dest: /etc/containerd
+    state: directory
+  when: runtime == 'containerd'
+
+- file:
+    path: "{{ data_root }}"
+    state: directory
+    mode: '0755'
+
+- file:
+    path: "{{ data_root }}/etcd-backup"
+    state: directory
+    mode: '0755'
+  when: etcd_backup_enable == "true" and inventory_hostname in groups['master']
+
+- name: 配置容器运行时
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+  when: runtime == 'docker'
+
+- template:
+    src: config.toml.j2
+    dest: /etc/containerd/config.toml
+  when: runtime == 'containerd'
+
+- name: 启动容器运行时
+  systemd:
+    name: docker
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+  when: runtime == 'docker'
+
+- systemd:
+    name: containerd
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+  when: runtime == 'containerd'
+
+- copy:
+    src: crictl.yaml
+    dest: /etc/crictl.yaml
+  when: runtime == 'containerd'
+
+- name: 创建kubelet数据目录
+  file:
+    path: "{{ data_root }}/kubelet"
+    state: directory
+    mode: '0700'
+
+- name: 设置kubelet参数
+  shell: |
+    if cat /etc/redhat-release &> /dev/null;then
+      if ! grep "root-dir" /etc/sysconfig/kubelet > /dev/null;then
+        sed -i 's#KUBELET_EXTRA_ARGS=#KUBELET_EXTRA_ARGS=--root-dir={{ data_root }}/kubelet#' /etc/sysconfig/kubelet
+      fi
+    elif [ "$(lsb_release -is)" == 'Ubuntu' ];then
+      if ! grep "root-dir" /etc/default/kubelet > /dev/null;then
+        echo 'KUBELET_EXTRA_ARGS=--root-dir={{ data_root }}/kubelet' > /etc/default/kubelet
+      fi
+    fi
+  args:
+    executable: /bin/bash
+
+- name: 设置kubelet开机自启
+  shell: systemctl enable kubelet
+  args:
+    executable: /bin/bash
+
+- name: 分发chrony_server端配置文件
+  template:
+    src: chrony-server.conf.j2
+    dest: /etc/chrony/chrony.conf
+  when: inventory_hostname == chrony_server and ansible_distribution == 'Ubuntu'
+
+- template:
+    src: chrony-server.conf.j2
+    dest: /etc/chrony.conf
+  when: inventory_hostname == chrony_server and ansible_distribution == 'CentOS'
+
+- name: 分发chrony_client端配置文件
+  template:
+    src: chrony-client.conf.j2
+    dest: /etc/chrony/chrony.conf
+  when: not inventory_hostname == chrony_server and ansible_distribution == 'Ubuntu'
+
+- template:
+    src: chrony-client.conf.j2
+    dest: /etc/chrony.conf
+  when: not inventory_hostname == chrony_server and ansible_distribution == 'CentOS'
+
+- name: 启动chrony服务
+  systemd:
+    name: chronyd
+    state: restarted
+    enabled: yes
+
+- name: 配置kubeadm-conig
+  template:
+    src: kubeadm-config.yaml.j2
+    dest: "{{ workdir }}/release/02-init/kubeadm-config.yaml"
+  when: inventory_hostname in groups['master']
+
+- name: 获取集群初始化所需镜像
+  shell: |
+    kubeadm config images pull --config {{ workdir }}/release/02-init/kubeadm-config.yaml --image-repository {{ imageRepository }} --kubernetes-version {{ k8s_version }}
+  args:
+    executable: /bin/bash
+  when: inventory_hostname in groups['master']
