@@ -1,9 +1,0 @@
----
-
-- name: 添加节点-master
-  script: master_join.sh
-  when: not inventory_hostname == 'k8s-master1' and inventory_hostname in groups['master']
-
-- name: 添加节点-node
-  script: node_join.sh
-  when: inventory_hostname in groups['node'] or inventory_hostname in groups['newnode']

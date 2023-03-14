@@ -1,9 +1,0 @@
----
-- name: test
-  gather_facts: false
-  hosts: 
-    - test
-  roles:
-    - test
-  tags: test
-
