@@ -1,4 +1,3 @@
-```shell
 #!/bin/bash
 function cpu() {
     NUM=1
@@ -41,5 +40,3 @@ cpu
 memory
 disk
 tcp_status
-
-```

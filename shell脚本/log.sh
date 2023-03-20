@@ -1,4 +1,3 @@
-
 WORKDIR=/data/logs
 DATE=$(date +%F)
 
