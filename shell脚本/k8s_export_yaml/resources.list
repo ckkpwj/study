@@ -1,0 +1,15 @@
+# The configuration file that controls the export type, one line at a time
+
+deployment
+statefulset
+secret
+configmap
+pv
+pvc
+service
+ingress
+# qapps.ketanyun.cn
+# qroles.ketanyun.cn
+# qcanvas.ketanyun.cn
+# qservices.ketanyun.cn
+# sa
