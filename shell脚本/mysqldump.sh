@@ -1,4 +1,3 @@
-```shell
 #!/bin/bash
 DATE=$(date +%F)
 BACKDIR=/data/mysqlbackup  #备份位置
@@ -12,4 +11,3 @@ for i in ${sun[*]}; do
 	 done
 	 find  ${BACKDIR} -type f -name "*.log" -mtime +7 |xargs rm -rf {}\;
 	 find  ${BACKDIR} -type f -name "*.sql" -mtime +7 |xargs rm -rf {}\;
-```
